@@ -1,4 +1,4 @@
-# llmwiki — Personal AI Knowledge Compiler
+# Viikkee — Personal AI Knowledge Compiler
 
 A self-compounding knowledge base that turns raw articles and clippings into an interlinked, browsable wiki — automatically.
 
