@@ -1,0 +1,33 @@
+# ── Compiler build output ─────────────────────────────────────
+llm-wiki-compiler/dist/
+llm-wiki-compiler/node_modules/
+
+# ── Wiki data (personal knowledge — not committed) ────────────
+# Compiled concept pages
+obsidian-wiki/wiki/concepts/
+obsidian-wiki/wiki/queries/
+# Static HTML output (fully generated from concepts)
+obsidian-wiki/wiki/web/
+# Generated navigation files
+obsidian-wiki/wiki/index.md
+obsidian-wiki/wiki/MOC.md
+# Raw source clippings (personal reading material)
+obsidian-wiki/sources/
+# Compiler state and caches
+obsidian-wiki/.llmwiki/
+
+# Root-level symlinks / copies of wiki data
+wiki/
+sources/
+
+# ── Environment & secrets ──────────────────────────────────────
+.env
+.env.local
+*.env
+
+# ── OS & editor noise ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
