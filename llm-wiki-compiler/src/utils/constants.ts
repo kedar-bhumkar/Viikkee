@@ -6,6 +6,14 @@
 /** Maximum source file size in characters before truncation. */
 export const MAX_SOURCE_CHARS = 100_000;
 
+/**
+ * Maximum characters of the wiki index included in extraction prompts.
+ * The full index grows unboundedly; capping it keeps request payloads
+ * within provider limits while still giving the LLM enough context for
+ * deduplication.
+ */
+export const MAX_EXTRACTION_INDEX_CHARS = 30_000;
+
 /** Minimum source content length to ingest without a warning. */
 export const MIN_SOURCE_CHARS = 50;
 
@@ -96,5 +104,6 @@ export const HIERARCHY_INCREMENTAL_RATIO = 0.01;
  */
 export const HIERARCHY_TWO_PHASE_THRESHOLD = 200;
 
-/** Number of concepts assigned per LLM call in two-phase mode. */
-export const HIERARCHY_ASSIGNMENT_BATCH_SIZE = 150;
+/** Number of concepts assigned per LLM call in two-phase mode.
+ * Kept at 75 so output fits within 4096 tokens (75 × ~50 tokens/assignment). */
+export const HIERARCHY_ASSIGNMENT_BATCH_SIZE = 75;

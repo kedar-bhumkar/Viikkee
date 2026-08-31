@@ -30,7 +30,6 @@ import {
 } from "../utils/constants.js";
 import {
   HIERARCHY_GENERATOR_TOOL,
-  HIERARCHY_EVALUATOR_TOOL,
   buildGeneratorPrompt,
   buildStructureOnlyPrompt,
   buildBatchAssignmentPrompt,
@@ -151,12 +150,18 @@ async function batchAssignConcepts(tree: HierarchyTree, concepts: PageSummary[])
       system,
       messages: [{ role: "user", content: "Assign these concepts to categories." }],
       // No tools — use plain completion so any model can respond with JSON directly.
-      // maxTokens overridden: 150 assignments × ~25 tokens each = ~3750 tokens minimum.
-      maxTokens: 6000,
+      // maxTokens overridden: 75 assignments × ~50 tokens each = ~3750 tokens minimum.
+      // Set to 8192 to accommodate reasoning model <think> blocks (MiniMax-M2.7, etc.)
+      // before the actual JSON output.
+      maxTokens: 8192,
       provider: getHierarchyProvider(),
     });
     const parsed = parseAssignments(raw);
-    if (parsed) applyAssignments(tree, parsed);
+    if (parsed) {
+      applyAssignments(tree, parsed);
+    } else {
+      output.status("!", output.warn(`  Batch assignment failed to parse (batch starting at ${i}). Raw: ${raw.slice(0, 200)}`));
+    }
   }
   return tree;
 }
@@ -176,6 +181,9 @@ async function callGeneratorTwoPhase(
     system,
     messages: [{ role: "user", content: "Return the hierarchy JSON now." }],
     // No tools — embed schema in prompt for maximum model compatibility.
+    // maxTokens overridden: up to 63 nodes × ~50 tokens each = ~3150 tokens minimum.
+    // Set to 16000 to accommodate reasoning model <think> blocks before the JSON structure.
+    maxTokens: 16000,
     provider: getHierarchyProvider(),
   });
   const tree = parseHierarchyTree(raw);
@@ -211,10 +219,16 @@ async function callEvaluator(
   const raw = await callClaude({
     system,
     messages: [{ role: "user", content: "Evaluate this hierarchy." }],
-    tools: [HIERARCHY_EVALUATOR_TOOL],
+    // Plain completion — no tool calling — for maximum model compatibility.
+    // 4096 tokens: accommodates reasoning model <think> blocks before the score/critique JSON.
+    maxTokens: 4096,
     provider: getHierarchyProvider(),
   });
-  return parseEvalResult(raw);
+  const result = parseEvalResult(raw);
+  if (!result) {
+    output.status("!", output.warn(`  Evaluator raw response (first 400 chars): ${raw.slice(0, 400)}`));
+  }
+  return result;
 }
 
 /** Run the generator→evaluator loop until acceptance or max iterations. */

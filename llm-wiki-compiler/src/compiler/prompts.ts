@@ -49,11 +49,28 @@ export const CONCEPT_EXTRACTION_TOOL = {
   },
 };
 
+/** JSON schema example embedded in the extraction prompt for plain-completion mode. */
+const EXTRACTION_SCHEMA_EXAMPLE = JSON.stringify(
+  {
+    concepts: [
+      {
+        concept: "Human-readable concept title",
+        summary: "One-line description",
+        is_new: true,
+        tags: ["tag1", "tag2"],
+      },
+    ],
+  },
+  null,
+  2,
+);
+
 /**
  * Build the system prompt for the concept extraction phase.
  * Instructs the LLM to analyze a source document and identify distinct concepts.
+ * Uses plain JSON completion (no tool calling) for maximum model compatibility.
  * @param sourceContent - The full text of the source document.
- * @param existingIndex - The current wiki index.md contents (may be empty).
+ * @param existingIndex - The current wiki index.md contents (may be empty, may be truncated).
  * @returns System prompt string for the extraction call.
  */
 export function buildExtractionPrompt(
@@ -69,7 +86,10 @@ export function buildExtractionPrompt(
     "and identify 3-8 distinct, meaningful concepts worth documenting as wiki pages.",
     "Each concept should be a standalone topic that someone might look up.",
     "Focus on key ideas, techniques, patterns, or entities — not trivial details.",
-    "Use the extract_concepts tool to return your findings.",
+    "",
+    "Respond with raw JSON only — no prose, no markdown fences, no explanation.",
+    "Use this exact schema:",
+    EXTRACTION_SCHEMA_EXAMPLE,
     indexSection,
     "\n\n--- SOURCE DOCUMENT ---\n\n",
     sourceContent,
@@ -124,13 +144,33 @@ export function buildPagePrompt(
 }
 
 /**
- * Parse the JSON tool output from concept extraction into typed objects.
- * @param toolOutput - Raw JSON string returned from the extract_concepts tool.
+ * Extract a JSON string from raw LLM output, stripping reasoning blocks and
+ * locating the JSON boundary so that reasoning models (e.g. MiniMax-M2.7)
+ * that emit `<think>…</think>` before the JSON are handled correctly.
+ */
+function extractConceptsJson(raw: string): string {
+  // Strip reasoning model think blocks before JSON extraction.
+  const stripped = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  // Handle markdown code fences.
+  const codeBlock = stripped.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlock) return codeBlock[1].trim();
+  // Find first JSON object/array boundary.
+  const start = Math.min(
+    stripped.indexOf("{") === -1 ? Infinity : stripped.indexOf("{"),
+    stripped.indexOf("[") === -1 ? Infinity : stripped.indexOf("["),
+  );
+  return start === Infinity ? stripped : stripped.slice(start).trim();
+}
+
+/**
+ * Parse the JSON output from concept extraction into typed objects.
+ * Handles both plain-completion JSON and tool-call JSON output.
+ * @param rawOutput - Raw string returned from the LLM.
  * @returns Array of ExtractedConcept objects.
  */
-export function parseConcepts(toolOutput: string): ExtractedConcept[] {
+export function parseConcepts(rawOutput: string): ExtractedConcept[] {
   try {
-    const parsed = JSON.parse(toolOutput);
+    const parsed = JSON.parse(extractConceptsJson(rawOutput));
     const concepts: ExtractedConcept[] = parsed.concepts ?? [];
     return concepts
       .filter(

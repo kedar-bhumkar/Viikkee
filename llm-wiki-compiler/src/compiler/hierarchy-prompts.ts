@@ -171,11 +171,46 @@ export function buildGeneratorPrompt(
 }
 
 /**
+ * Produce a compact tree summary replacing concept slug arrays with counts.
+ * Keeps category names, slugs, descriptions, and children intact so the evaluator
+ * can assess structure, coherence, balance, and depth — without listing every slug.
+ * This keeps the evaluator prompt small regardless of concept count.
+ */
+function compactTreeNode(node: HierarchyNode): object {
+  return {
+    name: node.name,
+    slug: node.slug,
+    description: node.description,
+    conceptCount: node.concepts.length,
+    children: node.children.map(compactTreeNode),
+  };
+}
+
+/** JSON schema hint embedded in the evaluator prompt for plain-completion models. */
+const EVALUATOR_SCHEMA_HINT = `
+Return ONLY valid JSON in this exact shape (no markdown fences, no prose):
+{
+  "score": 85,
+  "critique": "Specific revision instructions, or empty string if accepted.",
+  "accept": true
+}`;
+
+/**
  * Build the system prompt for the hierarchy evaluator.
+ * Uses plain JSON completion (no tool calling) for maximum model compatibility.
+ * Uses a compact tree representation (concept counts, not slug lists) to keep
+ * the prompt within token limits even for large concept sets.
  * @param tree - The hierarchy tree to score.
  * @param concepts - Original concept list for coverage checking.
  */
 export function buildEvaluatorPrompt(tree: HierarchyTree, concepts: PageSummary[]): string {
+  const compact = { categories: tree.categories.map(compactTreeNode) };
+  const assignedCount = tree.categories.reduce((sum, cat) => {
+    const walk = (n: HierarchyNode): number =>
+      n.concepts.length + n.children.reduce((s, c) => s + walk(c), 0);
+    return sum + walk(cat);
+  }, 0);
+
   return [
     "You are a hierarchy quality reviewer. Score this concept taxonomy on 4 rubrics (25 pts each, total 100):",
     "",
@@ -185,13 +220,14 @@ export function buildEvaluatorPrompt(tree: HierarchyTree, concepts: PageSummary[
     "4. DEPTH UTILITY (0-25): Subcategories represent genuine distinctions, not arbitrary splits.",
     "",
     "Set accept=true only if score >= 80.",
-    "If score < 80, provide specific, actionable revision instructions in critique.",
+    "If score < 80, provide specific, actionable revision instructions in critique (max 80 words).",
+    "If score >= 80, set critique to empty string.",
     "",
-    "Use the evaluate_hierarchy tool.",
+    EVALUATOR_SCHEMA_HINT,
     "",
-    `Hierarchy to evaluate:\n${JSON.stringify(tree, null, 2)}`,
+    `Total concepts: ${concepts.length}. Assigned in tree: ${assignedCount}.`,
     "",
-    `Original concepts (${concepts.length} total):\n${formatConceptList(concepts)}`,
+    `Hierarchy to evaluate (conceptCount = concepts at that node):\n${JSON.stringify(compact, null, 2)}`,
   ].join("\n");
 }
 
@@ -215,22 +251,26 @@ export function normalizeNode(raw: Record<string, unknown>): HierarchyNode {
 /**
  * Extract the first JSON object or array from a string.
  *
- * Handles two common cases where LLMs return JSON wrapped in prose:
- *   1. ```json ... ``` / ``` ... ``` markdown code blocks
- *   2. Raw JSON embedded somewhere in the text (grab from first { or [)
+ * Handles three common cases where LLMs return JSON wrapped in prose:
+ *   1. <think>...</think> reasoning blocks emitted by reasoning models (e.g. MiniMax-M2.7)
+ *   2. ```json ... ``` / ``` ... ``` markdown code blocks
+ *   3. Raw JSON embedded somewhere in the text (grab from first { or [)
  */
 function extractJsonString(text: string): string {
-  // Case 1: markdown code block
-  const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  // Case 1: strip reasoning blocks — reasoning models emit <think>...</think> before JSON.
+  const stripped = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+  // Case 2: markdown code block
+  const codeBlock = stripped.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlock) return codeBlock[1].trim();
 
-  // Case 2: find the first JSON structure boundary
+  // Case 3: find the first JSON structure boundary
   const start = Math.min(
-    text.indexOf("{") === -1 ? Infinity : text.indexOf("{"),
-    text.indexOf("[") === -1 ? Infinity : text.indexOf("["),
+    stripped.indexOf("{") === -1 ? Infinity : stripped.indexOf("{"),
+    stripped.indexOf("[") === -1 ? Infinity : stripped.indexOf("["),
   );
-  if (start === Infinity) return text.trim();
-  return text.slice(start).trim();
+  if (start === Infinity) return stripped;
+  return stripped.slice(start).trim();
 }
 
 /**

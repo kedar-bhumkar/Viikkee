@@ -22,7 +22,6 @@ import {
 import { callClaude } from "../utils/llm.js";
 import { acquireLock, releaseLock } from "../utils/lock.js";
 import {
-  CONCEPT_EXTRACTION_TOOL,
   buildExtractionPrompt,
   buildPagePrompt,
   parseConcepts,
@@ -46,6 +45,7 @@ import {
   COMPILE_CONCURRENCY,
   CONCEPTS_DIR,
   INDEX_FILE,
+  MAX_EXTRACTION_INDEX_CHARS,
   SOURCES_DIR,
 } from "../utils/constants.js";
 import { appendCompileLog } from "../utils/compile-log.js";
@@ -312,7 +312,10 @@ async function extractForSource(
 
   const sourcePath = path.join(root, SOURCES_DIR, sourceFile);
   const sourceContent = await readFile(sourcePath, "utf-8");
-  const existingIndex = await safeReadFile(path.join(root, INDEX_FILE));
+  const fullIndex = await safeReadFile(path.join(root, INDEX_FILE));
+  // Truncate the index to avoid oversized request payloads — the index grows
+  // unboundedly but the LLM only needs a representative sample for deduplication.
+  const existingIndex = fullIndex.slice(0, MAX_EXTRACTION_INDEX_CHARS);
   const concepts = await extractConcepts(sourceContent, existingIndex);
 
   if (concepts.length > 0) {
@@ -426,7 +429,9 @@ async function extractConcepts(
   const rawOutput = await callClaude({
     system,
     messages: [{ role: "user", content: "Extract the key concepts from this source." }],
-    tools: [CONCEPT_EXTRACTION_TOOL],
+    // Plain completion — no tool calling — for maximum model compatibility.
+    // 4096 tokens: enough for 3-8 concepts + reasoning model <think> blocks.
+    maxTokens: 4096,
   });
 
   return parseConcepts(rawOutput);

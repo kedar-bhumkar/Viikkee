@@ -259,7 +259,8 @@ function findBreadcrumbs(
 
 /**
  * Recursively search nodes for the target slug, building the ancestor trail.
- * Returns an array of {label} crumbs for the nodes that contain the slug.
+ * Each category crumb links to index.html anchored to its sidebar section.
+ * Returns an array of crumbs for the nodes that contain the slug.
  */
 function findTrail(
   nodes: HierarchyNode[],
@@ -267,7 +268,7 @@ function findTrail(
   ancestors: Crumb[],
 ): Crumb[] {
   for (const node of nodes) {
-    const current = [...ancestors, { label: node.name }];
+    const current = [...ancestors, { label: node.name, href: `../index.html#cat-${node.slug}` }];
     if (node.concepts.includes(targetSlug)) return current;
     const deeper = findTrail(node.children, targetSlug, current);
     if (deeper.length > 0) return deeper;

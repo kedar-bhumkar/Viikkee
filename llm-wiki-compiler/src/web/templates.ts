@@ -67,7 +67,7 @@ function renderSidebarNode(
     .join("\n");
 
   return `
-<details${openAttr}>
+<details id="cat-${node.slug}"${openAttr}>
   <summary>${escapeHtml(node.name)}</summary>
   <ul>${conceptLinks}</ul>
   ${childNodes}
