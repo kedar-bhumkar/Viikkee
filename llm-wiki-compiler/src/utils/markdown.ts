@@ -30,7 +30,9 @@ export function parseFrontmatter(content: string): {
   meta: Record<string, unknown>;
   body: string;
 } {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  // Normalize Windows CRLF → LF so the regex works regardless of how the file was written or checked out.
+  const normalized = content.replace(/\r\n/g, "\n");
+  const match = normalized.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!match) {
     return { meta: {}, body: content };
   }
