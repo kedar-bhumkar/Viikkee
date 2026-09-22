@@ -13,7 +13,11 @@
  * @returns A string suitable for passing to JSON.parse().
  */
 export function extractJsonString(text: string): string {
-  const stripped = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  // Strip complete think blocks, then truncated ones (no closing tag — response was cut off).
+  const stripped = text
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<think>[\s\S]*/gi, "")
+    .trim();
 
   const codeBlock = stripped.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlock) return codeBlock[1].trim();

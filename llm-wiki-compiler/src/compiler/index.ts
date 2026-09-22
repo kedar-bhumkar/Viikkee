@@ -419,7 +419,9 @@ async function generateMergedPage(
   };
   addObsidianMeta(frontmatterFields, entry.concept.concept, entry.concept.tags ?? []);
   const frontmatter = buildFrontmatter(frontmatterFields);
-  const fullPage = `${frontmatter}\n\n${pageBody}\n`;
+  // Strip reasoning model <think> blocks — they appear before the actual page content.
+  const cleanBody = pageBody.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const fullPage = `${frontmatter}\n\n${cleanBody}\n`;
   return await writePageIfValid(pagePath, fullPage, entry.concept.concept);
 }
 
