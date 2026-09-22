@@ -495,7 +495,7 @@ export function escapeHtml(str: string): string {
  * Escape content for safe embedding inside a JS template literal.
  * Escapes backslashes, backticks, and `${` sequences.
  */
-export function escapeForJs(content: string): string {
+function escapeForJs(content: string): string {
   return content
     .replace(/\\/g, "\\\\")
     .replace(/`/g, "\\`")
