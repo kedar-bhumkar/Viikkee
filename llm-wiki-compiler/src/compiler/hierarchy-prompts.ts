@@ -10,6 +10,7 @@
 
 import type { HierarchyTree, HierarchyEvalResult, HierarchyNode } from "../utils/types.js";
 import type { PageSummary } from "../utils/types.js";
+import { extractJsonString } from "../utils/json.js";
 
 /** A flattened category entry used in batch-assignment prompts. */
 export interface FlatCategory {
@@ -75,7 +76,7 @@ export const HIERARCHY_GENERATOR_TOOL = {
 };
 
 /** Tool definition for the hierarchy evaluator. */
-export const HIERARCHY_EVALUATOR_TOOL = {
+const HIERARCHY_EVALUATOR_TOOL = {
   name: "evaluate_hierarchy",
   description: "Score the proposed hierarchy on coverage, coherence, balance, and depth utility",
   input_schema: {
@@ -249,31 +250,6 @@ export function normalizeNode(raw: Record<string, unknown>): HierarchyNode {
 }
 
 /**
- * Extract the first JSON object or array from a string.
- *
- * Handles three common cases where LLMs return JSON wrapped in prose:
- *   1. <think>...</think> reasoning blocks emitted by reasoning models (e.g. MiniMax-M2.7)
- *   2. ```json ... ``` / ``` ... ``` markdown code blocks
- *   3. Raw JSON embedded somewhere in the text (grab from first { or [)
- */
-function extractJsonString(text: string): string {
-  // Case 1: strip reasoning blocks — reasoning models emit <think>...</think> before JSON.
-  const stripped = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-
-  // Case 2: markdown code block
-  const codeBlock = stripped.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (codeBlock) return codeBlock[1].trim();
-
-  // Case 3: find the first JSON structure boundary
-  const start = Math.min(
-    stripped.indexOf("{") === -1 ? Infinity : stripped.indexOf("{"),
-    stripped.indexOf("[") === -1 ? Infinity : stripped.indexOf("["),
-  );
-  if (start === Infinity) return stripped;
-  return stripped.slice(start).trim();
-}
-
-/**
  * Parse the JSON tool output from the hierarchy generator.
  * Returns null if parsing fails so the loop can handle the error gracefully.
  * Normalizes every node so `children` and `concepts` are always arrays.
@@ -310,7 +286,7 @@ export function parseEvalResult(toolOutput: string): HierarchyEvalResult | null 
  * Tool for assigning a batch of concepts to category slugs.
  * Used in Phase 2 of the two-phase generator for large concept sets.
  */
-export const CONCEPT_ASSIGNMENT_TOOL = {
+const CONCEPT_ASSIGNMENT_TOOL = {
   name: "assign_concepts",
   description: "Assign each concept slug to the most appropriate category slug",
   input_schema: {

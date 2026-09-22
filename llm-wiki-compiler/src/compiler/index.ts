@@ -37,6 +37,7 @@ import {
 } from "./deps.js";
 import { markOrphaned, orphanUnownedFrozenPages } from "./orphan.js";
 import { resolveLinks } from "./resolver.js";
+import { selectApprovedLinks, filterDuplicates } from "./noul-linker.js";
 import { generateIndex } from "./indexgen.js";
 import { addObsidianMeta, generateMOC } from "./obsidian.js";
 import { updateEmbeddings } from "../utils/embeddings.js";
@@ -316,7 +317,8 @@ async function extractForSource(
   // Truncate the index to avoid oversized request payloads — the index grows
   // unboundedly but the LLM only needs a representative sample for deduplication.
   const existingIndex = fullIndex.slice(0, MAX_EXTRACTION_INDEX_CHARS);
-  const concepts = await extractConcepts(sourceContent, existingIndex);
+  const rawConcepts = await extractConcepts(sourceContent, existingIndex);
+  const concepts = await filterDuplicates(root, rawConcepts);
 
   if (concepts.length > 0) {
     const names = concepts.map((c) => c.concept).join(", ");
@@ -382,12 +384,18 @@ async function generateMergedPage(
   const pagePath = path.join(root, CONCEPTS_DIR, `${entry.slug}.md`);
   const existingPage = await safeReadFile(pagePath);
   const relatedPages = await loadRelatedPages(root, entry.slug);
+  const approvedLinks = await selectApprovedLinks(root, entry.slug, {
+    title: entry.concept.concept,
+    summary: entry.concept.summary,
+    tags: entry.concept.tags,
+  });
 
   const system = buildPagePrompt(
     entry.concept.concept,
     entry.combinedContent,
     existingPage,
     relatedPages,
+    approvedLinks,
   );
 
   const pageBody = await callClaude({

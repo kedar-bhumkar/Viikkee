@@ -57,6 +57,15 @@ export const EMBEDDINGS_FILE = ".llmwiki/embeddings.json";
 /** Number of most similar pages to return from embedding-based pre-filter. */
 export const EMBEDDING_TOP_K = 15;
 
+/** Maximum candidates fed to Noul per page for link selection or dedup. */
+export const NOUL_CANDIDATE_COUNT = 30;
+
+/** Minimum Noul probability to approve a link between two wiki pages. */
+export const NOUL_LINK_THRESHOLD = 0.75;
+
+/** Minimum Noul probability to classify an extracted concept as a near-duplicate. */
+export const NOUL_DEDUP_THRESHOLD = 0.85;
+
 /** Embedding model to use per provider. */
 export const EMBEDDING_MODELS: Record<string, string> = {
   anthropic: "voyage-3-lite",

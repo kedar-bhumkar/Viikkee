@@ -6,12 +6,13 @@
  */
 
 import type { ExtractedConcept } from "../utils/types.js";
+import { extractJsonString as extractConceptsJson } from "../utils/json.js";
 
 /**
  * Anthropic Tool definition for extracting knowledge concepts from a source.
  * Used with callClaude's tool_use mode to get structured concept data.
  */
-export const CONCEPT_EXTRACTION_TOOL = {
+const CONCEPT_EXTRACTION_TOOL = {
   name: "extract_concepts",
   description: "Extract knowledge concepts from a source document",
   input_schema: {
@@ -103,6 +104,8 @@ export function buildExtractionPrompt(
  * @param sourceContent - The source material to draw from.
  * @param existingPage - The current page content if updating (empty for new pages).
  * @param relatedPages - Concatenated content of related wiki pages for context.
+ * @param approvedLinks - Pre-approved link titles from Noul selection. When provided,
+ *   only these titles may be linked; when empty, falls back to freehand wikilinks.
  * @returns System prompt string for the page generation call.
  */
 export function buildPagePrompt(
@@ -110,6 +113,7 @@ export function buildPagePrompt(
   sourceContent: string,
   existingPage: string,
   relatedPages: string,
+  approvedLinks: string[] = [],
 ): string {
   const existingSection = existingPage
     ? `\n\nExisting page to update:\n\n${existingPage}`
@@ -119,11 +123,17 @@ export function buildPagePrompt(
     ? `\n\nRelated wiki pages for cross-referencing:\n\n${relatedPages}`
     : "";
 
+  // When Noul has pre-approved specific pages, constrain links to that list.
+  // Otherwise fall back to asking the LLM to suggest links freehand.
+  const wikilinkInstruction = approvedLinks.length > 0
+    ? `Link only to these pre-approved related pages using [[Title]] notation where relevant: ${approvedLinks.map(t => `[[${t}]]`).join(", ")}`
+    : "Suggest [[wikilinks]] to related concepts where appropriate.";
+
   return [
     `You are a wiki author. Write a clear, well-structured markdown page about "${concept}".`,
     "Draw facts only from the provided source material.",
     "Include a ## Sources section at the end listing the source document.",
-    "Suggest [[wikilinks]] to related concepts where appropriate.",
+    wikilinkInstruction,
     "Write in a neutral, informative tone. Be concise but thorough.",
     "",
     "Source attribution: at the end of each prose paragraph, append a citation",
@@ -141,25 +151,6 @@ export function buildPagePrompt(
     "\n\n--- SOURCE MATERIAL ---\n\n",
     sourceContent,
   ].join("\n");
-}
-
-/**
- * Extract a JSON string from raw LLM output, stripping reasoning blocks and
- * locating the JSON boundary so that reasoning models (e.g. MiniMax-M2.7)
- * that emit `<think>…</think>` before the JSON are handled correctly.
- */
-function extractConceptsJson(raw: string): string {
-  // Strip reasoning model think blocks before JSON extraction.
-  const stripped = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-  // Handle markdown code fences.
-  const codeBlock = stripped.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (codeBlock) return codeBlock[1].trim();
-  // Find first JSON object/array boundary.
-  const start = Math.min(
-    stripped.indexOf("{") === -1 ? Infinity : stripped.indexOf("{"),
-    stripped.indexOf("[") === -1 ? Infinity : stripped.indexOf("["),
-  );
-  return start === Infinity ? stripped : stripped.slice(start).trim();
 }
 
 /**
