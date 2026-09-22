@@ -6,7 +6,22 @@
  * Designed for `npx llmwiki` or global install via `npm install -g llm-wiki-compiler`.
  */
 
-import "dotenv/config";
+// Load .env by walking up the directory tree (supports running from a wiki subdirectory).
+import { config as dotenvConfig } from "dotenv";
+import { existsSync } from "fs";
+import { dirname, join, resolve } from "path";
+
+(function loadEnvFile() {
+  let dir = process.cwd();
+  for (let i = 0; i < 5; i++) {
+    const candidate = join(dir, ".env");
+    if (existsSync(candidate)) { dotenvConfig({ path: candidate }); return; }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  dotenvConfig(); // fallback: try CWD silently
+})();
 import { createRequire } from "module";
 import { Command } from "commander";
 import ingestCommand from "./commands/ingest.js";
